@@ -26,7 +26,88 @@ namespace Genetics {
   constexpr float HEAT_MAX = 100.0f;
   constexpr float KINETIC_MAX = 60.0f;
   constexpr float STUN_MAX = 100.0f;
-  //const static constexpr float LIGHTSABER_MAX = 100.f;
+
+  inline int randomizeValue(int value, int quality) {
+    int wQuality = 8 - quality; // reverse range this is not the first time.
+    int min = (value) + ((wQuality - 5) * 5);
+    int max = (value) + ((wQuality - 3) * 5);
+    return (int)(System::random(max - min) + min);
+  }
+
+  inline float generateStatLevel(int health) {
+    return (DnaManager::instance()->levelForScore(DnaManager::HAM_LEVEL, health) + 1) * 6.0f;
+  }
+
+  inline float generateDamageLevel(float dps) {
+    return DnaManager::instance()->levelForScore(DnaManager::DPS_LEVEL, dps) * 10.f;
+  }
+
+  inline float generateHitLevel(float hitChance) {
+    return (DnaManager::instance()->levelForScore(DnaManager::HIT_LEVEL, hitChance) + 1.0f) * 1.0f;
+  }
+
+  inline float generateRegenLevel(int hamRegen) {
+    return (DnaManager::instance()->levelForScore(DnaManager::REG_LEVEL, hamRegen / 10) + 10.f) * 2.0f;
+  }
+
+  inline float generteArmorLevel(int armor, float effectResist) {
+    return DnaManager::instance()->levelForScore(DnaManager::ARM_LEVEL, (armor * 500.0f) + (effectResist * 10.0f));
+  }
+
+  inline float generateArmorBaseLevel(int generatedArmorLevel) {
+    return DnaManager::instance()->valueForLevel(DnaManager::ARM_LEVEL, generatedArmorLevel);
+  }
+
+  inline float generateBaseLevel(int statLevel, int damageLevel, int armorLevel, int regenLevel, int hitLevel) {
+    return (((statLevel) + (damageLevel) + (regenLevel) + (hitLevel)) / 19.0f) + 0.5f;
+  }
+
+  // Calculate the input creature levels
+  inline int levelForCreature(Creature* creature) {
+    return creature->getLevel();
+  }
+
+  // calculate the resistance level modifier
+  inline int resistMath(int input, int rating, int effectiveness, bool multiply, int multValue, int lowValue) {
+    int rValue = rating * 25;
+    int eValue = (effectiveness / (rating + 1));
+    
+    if (input > 0) {
+      if (multiply) {
+	return Math::max((input - (rValue + eValue)), 0) * multValue;
+      } else {
+	return Math::max((input - (rValue + eValue)), 0) / multValue;
+      }
+    } else {
+      if (lowValue == 1) {
+	return input * (rValue + eValue);
+      } else {
+	return input * (rValue + eValue) * lowValue;
+      }
+    }
+  }
+
+  inline int calcArmorLevelByStats(int armorRating, int armorLevel, int baseLevel, int armorBase, float kinetic, float energy, float blast, float heat, float cold, float electricity, float acid, float stun) {
+    int level = armorLevel + 1;
+    if (level < baseLevel)
+      level = baseLevel;
+    int eff = armorBase / 50;
+    if (armorBase > 500)
+      eff = (armorBase - 500) / 50;
+    if (armorBase == 500)
+      eff = 0;
+    int resistanceLevel = 0;
+    resistanceLevel += resistMath(kinetic, armorRating, eff, true, 3, 6);
+    resistanceLevel += resistMath(energy, armorRating, eff, true, 3, 6);
+    resistanceLevel += resistMath(blast, armorRating, eff, false, 2.0, 1);
+    resistanceLevel += resistMath(heat, armorRating, eff, false, 2.0, 1);
+    resistanceLevel += resistMath(cold, armorRating, eff, false, 2.0, 1);
+    resistanceLevel += resistMath(electricity, armorRating, eff, false, 2.0, 1);
+    resistanceLevel += resistMath(acid, armorRating, eff, false, 2.0, 1);
+    resistanceLevel += resistMath(stun, armorRating, eff, false, 2.0, 1);
+    level += ((float)resistanceLevel) / 10.0;
+    return level;
+  }
 
   // Hardiness and Fortiture
   inline float physiqueFormula(float physique, float prowess, float mental, float psychology, float aggression) {
@@ -207,17 +288,6 @@ namespace Genetics {
       dValue = getProperResistance(componentD->getStun(), componentD->isSpecialResist(type), override);
       eValue = getProperResistance(componentE->getStun(), componentE->isSpecialResist(type), override);
       break;
-      /*case SharedWeaponObjectTemplate::LIGHTSABER:
-	#ifdef DEBUG_GENETIC_LAB
-	Logger::console.info(true) << " - Lightsaber - ";
-	#endif
-	override = hasSpecialResist(componentA, componentB, componentC, componentD, componentE, type) || hasVulnerability(componentA->getSaber(), componentB->getSaber(), componentC->getSaber(), componentD->getSaber(), componentE->getSaber());
-	aValue = getProperResistance(componentA->getSaber(), componentA->isSpecialResist(type), override);
-	bValue = getProperResistance(componentB->getSaber(), componentB->isSpecialResist(type), override);
-	cValue = getProperResistance(componentC->getSaber(), componentC->isSpecialResist(type), override);
-	dValue = getProperResistance(componentD->getSaber(), componentD->isSpecialResist(type), override);
-	eValue = getProperResistance(componentE->getSaber(), componentE->isSpecialResist(type), override);
-	break;*/
     }
 
 
@@ -318,13 +388,6 @@ namespace Genetics {
     return rand;
  }
 
-  inline int randomizeValue(int value, int quality) {
-    int wQuality = 8 - quality; // reverse range this is not the first time.
-    int min = (value) + ((wQuality - 5) * 5);
-    int max = (value) + ((wQuality - 3) * 5);
-    return (int)(System::random(max - min) + min);
-  }
-
   // Calculate the creatures overall level as a pet.
   inline int calculatePetLevel(GeneticComponent* pet) {
 #ifdef DEBUG_GENETIC_LAB
@@ -421,26 +484,6 @@ namespace Genetics {
     return level;
   }
 
-  // calculate the resistance level modifier
-  inline int resistMath(int input, int rating, int effectiveness, bool multiply, int multValue, int lowValue) {
-    int rValue = rating * 25;
-    int eValue = (effectiveness / (rating + 1));
-
-    if (input > 0) {
-      if (multiply) {
-	return Math::max((input - (rValue + eValue)), 0) * multValue;
-      } else {
-	return Math::max((input - (rValue + eValue)), 0) / multValue;
-      }
-    } else {
-      if (lowValue == 1) {
-	return input * (rValue + eValue);
-      } else {
-	return input * (rValue + eValue) * lowValue;
-      }
-    }
-  }
-
   inline float determineMaxExperimentation(float min, float max) {
     return ceil((max / 10.0f) * .01f); // deterine max percentage. we will lock the stats each round after experimentation to handle adjustment our selves.
   }
@@ -470,112 +513,6 @@ namespace Genetics {
   inline float calculatHitLevel(float toHit) {
     return DnaManager::instance()->levelForScore(DnaManager::HIT_LEVEL, toHit);
   }
-
-  inline int calcArmorLevelByStats(int armorRating, int armorLevel, int baseLevel, int armorBase, float kinetic, float energy, float blast, float heat, float cold, float electricity, float acid, float stun) {
-    int level = armorLevel + 1;
-    if (level < baseLevel)
-      level = baseLevel;
-    int eff = armorBase / 50;
-    if (armorBase > 500)
-      eff = (armorBase - 500) / 50;
-    if (armorBase == 500)
-      eff = 0;
-    int resistanceLevel = 0;
-    resistanceLevel += resistMath(kinetic, armorRating, eff, true, 3, 6);
-    resistanceLevel += resistMath(energy, armorRating, eff, true, 3, 6);
-    resistanceLevel += resistMath(blast, armorRating, eff, false, 2.0, 1);
-    resistanceLevel += resistMath(heat, armorRating, eff, false, 2.0, 1);
-    resistanceLevel += resistMath(cold, armorRating, eff, false, 2.0, 1);
-    resistanceLevel += resistMath(electricity, armorRating, eff, false, 2.0, 1);
-    resistanceLevel += resistMath(acid, armorRating, eff, false, 2.0, 1);
-    resistanceLevel += resistMath(stun, armorRating, eff, false, 2.0, 1);
-    level += ((float)resistanceLevel) / 10.0;
-    return level;
-  }
-
-  inline float generateStatLevel(int health) {
-    return (DnaManager::instance()->levelForScore(DnaManager::HAM_LEVEL, health) + 1) * 6.0f;
-  }
-
-  inline float generateDamageLevel(float dps) {
-    return DnaManager::instance()->levelForScore(DnaManager::DPS_LEVEL, dps) * 10.f;
-  }
-
-  inline float generateHitLevel(float hitChance) {
-    return (DnaManager::instance()->levelForScore(DnaManager::HIT_LEVEL, hitChance) + 1.0f) * 1.0f;
-  }
-
-  inline float generateRegenLevel(int hamRegen) {
-    return (DnaManager::instance()->levelForScore(DnaManager::REG_LEVEL, hamRegen / 10) + 10.f) * 2.0f;
-  }
-
-  inline float generteArmorLevel(int armor, float effectResist) {
-    return DnaManager::instance()->levelForScore(DnaManager::ARM_LEVEL, (armor * 500.0f) + (effectResist * 10.0f));
-  }
-
-  inline float generateArmorBaseLevel(int generatedArmorLevel) {
-    return DnaManager::instance()->valueForLevel(DnaManager::ARM_LEVEL, generatedArmorLevel);
-  }
-
-  inline float generateBaseLevel(int statLevel, int damageLevel, int armorLevel, int regenLevel, int hitLevel) {
-    return (((statLevel) + (damageLevel) + (regenLevel) + (hitLevel)) / 19.0f) + 0.5f;
-  }
-
-  // Calculate the input creature levels
-  inline int levelForCreature(Creature* creature) {
-    return creature->getLevel();
-  }
-
-  /*
-   * Genetic experiments differently, we have know formula increase per point spent.
-   * so we can calculate the max points possible for any given stat they arent as linear as resource items are.
-   */
-
-  /*
-  // demo 2,342,14
-  static float maxExperimentationPercentage(float a, float b, float aMax, float bMax) {
-  int count = 1;
-  float workingA = a;
-  float workingB = b;
-  int aCount = 0;
-  int bCount = 0;
-  // max possible points in a given row is 10 i.e. 100%
-  while ((workingA < aMax || workingB < bMax) && count < 11) {
-  float wa = workingA;
-  float wb = workingB;
-  //workingA += experimentFormula(wb, wa);
-  //workingB += experimentFormula(wa, wb);
-  if (workingB > bMax) {
-  bCount = count;
-  workingB = bMax;
-  }
-  if (workingA > aMax) {
-  aCount = count;
-  workingA = aMax;
-  }
-  if (workingA == aMax && workingB == bMax) {
-  count = 11;
-  }
-  count++;
-  }
-  // We know the min and max of each one, cal the % diff, and pick highest
-  // float maxApercent = 100.00/(aMax/a);
-  // float maxBpercent = 100.0/(bMax/b);
-  // However each exp point will move it up by a chunk. soooooo good = 1 point in the given formula
-  // we should now have the run to the max for both a and b, so determine the highest
-  // if we say 14 rounds needed the max percentage would be: 14/10 = 1.4 or 140% or 100% normalized
-  float maxACount = aCount / 10.0f;
-  float maxBCount = bCount / 10.0f;
-  float maxCount = maxACount > maxBCount ? maxACount : maxBCount;
-  return maxCount > 1 ? 1 : maxCount;
-  }
-
-  static float determineMinResistance(float input) {
-  if (input < 0) // if max is vulnerable the min is always vulnerable
-  return -100;
-  return round(input * ((input / 100.0f) + 0.15f));
-  }
-  */
 };
 
 } // namespace labratories
