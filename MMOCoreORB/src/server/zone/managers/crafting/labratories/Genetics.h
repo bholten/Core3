@@ -75,16 +75,16 @@ inline int resistMath(int input, int rating, int effectiveness, bool multiply, i
 	if (input > 0) {
 		if (multiply) {
 			return Math::max((input - (rValue + eValue)), 0) * multValue;
-		} else {
-			return Math::max((input - (rValue + eValue)), 0) / multValue;
 		}
-	} else {
-		if (lowValue == 1) {
-			return input * (rValue + eValue);
-		} else {
-			return input * (rValue + eValue) * lowValue;
-		}
+
+		return Math::max((input - (rValue + eValue)), 0) / multValue;
 	}
+
+	if (lowValue == 1) {
+		return input * (rValue + eValue);
+	}
+
+	return input * (rValue + eValue) * lowValue;
 }
 
 inline int calcArmorLevelByStats(int armorRating, int armorLevel, int baseLevel, int armorBase, float kinetic, float energy, float blast, float heat, float cold, float electricity, float acid, float stun) {
@@ -288,6 +288,11 @@ inline float resistanceFormula(DnaComponent* componentA, DnaComponent* component
 			dValue = getProperResistance(componentD->getStun(), componentD->isSpecialResist(type), override);
 			eValue = getProperResistance(componentE->getStun(), componentE->isSpecialResist(type), override);
 			break;
+		default:
+#ifdef DEBUG_GENETIC_LAB
+			Logger::console.info(true) << " - Unknown resist type - "
+#endif
+			break;
 	}
 
 	float result = (aValue * 0.4) + (bValue * 0.25) + (cValue * 0.05) + (dValue * 0.05) + (eValue * 0.25);
@@ -356,10 +361,6 @@ inline int dietToValue(int diet, int quality) {
 		level = 7.0;
 	}
 
-	/*if (level == 0 ){ //cant be 0 as per above code
-	  level = 1.0;
-	  }*/
-
 	base = round(((level - 0.1) / (9.2)) * 1000.0);
 
 	return randomizeValue(base, quality);
@@ -413,9 +414,6 @@ inline int calculatePetLevel(GeneticComponent* pet) {
 	// Pet Base Level
 	float baseLevel = ((statLevel + damageLevel + regenerationLevel + hitLevel) / 19.0) + 0.5;
 
-	// Secondary Armor Level -- unused
-	// float armorLevel2 = calcArmorLevelByStats(pet->getArmor(), armorLevel, baseLevel, armorBase, pet->getKinetic(), pet->getEnergy(), pet->getBlast(), pet->getHeat(), pet->getCold(), pet->getElectrical(), pet->getAcid(), pet->getStun()) * 2.0f;
-
 	float defenseLevel = hitLevel;
 
 	if (defenseLevel < baseLevel)
@@ -434,7 +432,6 @@ inline int calculatePetLevel(GeneticComponent* pet) {
 	Logger::console.info(true) << "Armor Level: " << armorLevel;
 	Logger::console.info(true) << "Armor Base: " << armorBase;
 	Logger::console.info(true) << "Base Level: " << baseLevel;
-	// Logger::console.info(true) << "Armor Level2: " << armorLevel2;
 	Logger::console.info(true) << "========== END Genetics -- Calculate Pet level - Final Level: " << levelFloat << " ==========";
 #endif
 
@@ -448,9 +445,7 @@ inline int calculateAgentLevel(int health, float dps, float hit, int regen, int 
 	int defenseLevel = hitLevel;
 	int regenerationLevel = generateRegenLevel(regen);
 	int armorLevel = generteArmorLevel(armor, effective);
-	int armorBase = DnaManager::instance()->valueForLevel(DnaManager::ARM_LEVEL, armorLevel);
 	int baseLevel = (((statLevel) + (damageLevel) + (regenerationLevel) + (hitLevel)) / 19.0) + 0.5;
-	int armorLevel2 = calcArmorLevelByStats(armor, armorLevel, baseLevel, armorBase, kin, eng, bla, heat, cold, elec, acid, stun) * 2;
 
 	if (defenseLevel < baseLevel)
 		defenseLevel = baseLevel;
